@@ -2,7 +2,7 @@
 
 
 Flour Home
-Remove the drawer (reference Sprite shrimp)
+Remove the drawer (reference @PeterCxy)
 Application icon overlay background
 The modified widget
 Other updates
