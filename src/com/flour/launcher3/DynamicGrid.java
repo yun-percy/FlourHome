@@ -213,7 +213,7 @@ class DeviceProfile {
         */
 
         // Hotseat
-        hotseatBarHeightPx = iconSizePx + 4 * edgeMarginPx;
+        hotseatBarHeightPx = iconSizePx + 6 * edgeMarginPx;
         hotseatCellWidthPx = iconSizePx;
         hotseatCellHeightPx = iconSizePx;
 

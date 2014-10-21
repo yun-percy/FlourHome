@@ -114,100 +114,125 @@ final class Utilities {
     /**
      * Returns a bitmap suitable for the all apps view.
      */
-    static Bitmap createIconBitmap(Drawable icon, Context context) {
-        synchronized (sCanvas) { // we share the statics :-(
-            if (sIconWidth == -1) {
-                initStatics(context);
-            }
+	@SuppressWarnings({ "deprecation", "unused" })
+	static Bitmap createIconBitmap(Drawable icon, Context context) {
+		synchronized (sCanvas) { // we share the statics :-(
+			if (sIconWidth == -1) {
+				initStatics(context);
+			}
+			int width = sIconWidth;
+			int height = sIconHeight;
+			int sourceWidth = icon.getIntrinsicWidth();
+			int sourceHeight = icon.getIntrinsicHeight();
+			if (sourceWidth > 0 && sourceHeight > 0) {
+				// Scale the icon proportionally to the icon dimensions
+				final float ratio = (float) sourceWidth / sourceHeight;
+				if (sourceWidth > sourceHeight) {
+					height = (int) (width / ratio);
+				} else if (sourceHeight > sourceWidth) {
+					width = (int) (height * ratio);
+				}
+			}
 
-            int width = sIconWidth;
-            int height = sIconHeight;
+			// no intrinsic size --> use default size
+			int textureWidth = sIconTextureWidth;
+			int textureHeight = sIconTextureHeight;
 
-            if (icon instanceof PaintDrawable) {
-                PaintDrawable painter = (PaintDrawable) icon;
-                painter.setIntrinsicWidth(width);
-                painter.setIntrinsicHeight(height);
-            } else if (icon instanceof BitmapDrawable) {
-                // Ensure the bitmap has a density.
-                BitmapDrawable bitmapDrawable = (BitmapDrawable) icon;
-                Bitmap bitmap = bitmapDrawable.getBitmap();
-                if (bitmap.getDensity() == Bitmap.DENSITY_NONE) {
-                    bitmapDrawable.setTargetDensity(context.getResources().getDisplayMetrics());
-                }
-            }
-            int sourceWidth = icon.getIntrinsicWidth();
-            int sourceHeight = icon.getIntrinsicHeight();
-            if (sourceWidth > 0 && sourceHeight > 0) {
-                // There are intrinsic sizes.
-                if (width < sourceWidth || height < sourceHeight) {
-                    // It's too big, scale it down.
-                    final float ratio = (float) sourceWidth / sourceHeight;
-                    if (sourceWidth > sourceHeight) {
-                        height = (int) (width / ratio);
-                    } else if (sourceHeight > sourceWidth) {
-                        width = (int) (height * ratio);
-                    }
-                } else if (sourceWidth < width && sourceHeight < height) {
-                    // Don't scale up the icon
-                    width = sourceWidth;
-                    height = sourceHeight;
-                }
-            }
+			Bitmap bitmap = Bitmap.createBitmap(textureWidth, textureHeight,
+					Bitmap.Config.ARGB_8888);
+			final Canvas canvas = sCanvas;
+			canvas.setBitmap(bitmap);
 
-            // no intrinsic size --> use default size
-            int textureWidth = sIconTextureWidth;
-            int textureHeight = sIconTextureHeight;
+			final int left = (textureWidth-width) / 2;
+			final int top = (textureHeight-height) / 2;
 
-            final Bitmap bitmap = Bitmap.createBitmap(textureWidth, textureHeight,
-                    Bitmap.Config.ARGB_8888);
-            final Canvas canvas = sCanvas;
-            canvas.setBitmap(bitmap);
+			@SuppressWarnings("all") // suppress dead code warning
+			final boolean debug = false;
+			if (debug) {
+				// draw a big box for the icon for debugging
+				canvas.drawColor(sColors[sColorIndex]);
+				if (++sColorIndex >= sColors.length) sColorIndex = 0;
+				Paint debugPaint = new Paint();
+				debugPaint.setColor(0xffcccc00);
+				canvas.drawRect(left, top, left+width, top+height, debugPaint);
+			}
+		        if (debug)
+			{
+				Bitmap backBitmap = BitmapFactory.decodeResource(context.getResources(),APP_ICON_BG[0]);
+				Bitmap backBitmap2=backBitmap.copy(backBitmap.getConfig(), true);
 
-            final int left = (textureWidth-width) / 2;
-            final int top = (textureHeight-height) / 2;
+				    backBitmap2 = toRoundCorner(backBitmap2,14);
+				int backWidth = backBitmap2.getWidth();
+				int backHeight = backBitmap2.getHeight();
 
-            @SuppressWarnings("all") // suppress dead code warning
-            final boolean debug = false;
-            if (debug) {
-                // draw a big box for the icon for debugging
-                canvas.drawColor(sColors[sColorIndex]);
-                if (++sColorIndex >= sColors.length) sColorIndex = 0;
-                Paint debugPaint = new Paint();
-                debugPaint.setColor(0xffcccc00);
-                canvas.drawRect(left, top, left+width, top+height, debugPaint);
-            }
-            
-            // app鍙犲姞鑳屾櫙
-            if (true) 
-            {
-                Bitmap backBitmap = BitmapFactory.decodeResource(context.getResources(),
-                        R.drawable.icon_background);    //鍙犲姞鑳屾櫙鍥�
-                int backWidth = backBitmap.getWidth();
-                int backHeight = backBitmap.getHeight();
-                if(backWidth != sIconWidth || backHeight != sIconHeight)
-                {
-                    Matrix matrix = new Matrix();
-                    matrix.postScale((float)sIconWidth/backWidth, (float)sIconHeight/backHeight);
-                    canvas.drawBitmap(Bitmap.createBitmap(backBitmap, 0, 0, backWidth, backHeight, matrix, true),
-                    0.0f, 0.0f, null);
-					
-                }
-                else
-                {
-                    canvas.drawBitmap(backBitmap, 0.0f, 0.0f, null);
-                }
-            }
-
-            sOldBounds.set(icon.getBounds());
-            icon.setBounds(left, top, left+width, top+height);
-            icon.draw(canvas);
-            icon.setBounds(sOldBounds);
-            canvas.setBitmap(null);
-
-            return bitmap;
+				if(backWidth != sIconWidth || backHeight != sIconHeight)
+				{
+					Matrix matrix = new Matrix();
+					matrix.postScale((float)sIconWidth/backWidth, (float)sIconHeight/backHeight);
+					canvas.drawBitmap(Bitmap.createBitmap(backBitmap2, 0, 0, backWidth, backHeight, matrix, true),0.0f, 0.0f, null);
+				}else
+				{
+					canvas.drawBitmap(backBitmap2, 0.0f, 0.0f, null);
+				}
+				
+			}
+		
+			int backwidth =BitmapFactory.decodeResource(context.getResources(),APP_ICON_BG[0]).getWidth();
+			int backheight = BitmapFactory.decodeResource(context.getResources(),APP_ICON_BG[0]).getHeight();
+			if (icon instanceof PaintDrawable) {
+			PaintDrawable painter = (PaintDrawable) icon;
+			painter.setIntrinsicWidth(width);
+			painter.setIntrinsicHeight(height);
+			} else if (icon instanceof BitmapDrawable) {
+				// Ensure the bitmap has a density.
+				BitmapDrawable bitmapDrawable = (BitmapDrawable) icon;
+				BitmapDrawable bitmapDrawable1 = (BitmapDrawable) icon;
+				Bitmap bitmap11 = bitmapDrawable1.getBitmap();
+				float sourceWidth1 = ((float) backwidth) / bitmap11.getWidth();   
+				float sourceHeight1 = ((float) backheight) / bitmap11.getHeight();   
+				Matrix matrix = new Matrix();   
+				matrix.postScale(sourceWidth1, sourceHeight1);   
+				bitmap11 = Bitmap.createBitmap(bitmap11, 0, 0, bitmap11.getWidth(), bitmap11.getHeight(), matrix, true);
+				bitmap11 = toRoundCorner(bitmap11, 12);
+				icon = new BitmapDrawable(bitmap11);
+				
+				if (bitmap11.getDensity() == Bitmap.DENSITY_NONE) {
+					bitmapDrawable.setTargetDensity(context.getResources().getDisplayMetrics());
+				}
+			}
+			
+                        sOldBounds.set(icon.getBounds());
+			icon.setBounds(left, top, left+width, top+height);
+			icon.draw(canvas);
+			icon.setBounds(sOldBounds);
+			canvas.setBitmap(null);
+			return bitmap;
+		}
         }
-    }
-
+	public static Bitmap toRoundCorner(Bitmap bitmap, int pixels) {  
+		Bitmap output = Bitmap.createBitmap(bitmap.getWidth(),  
+				bitmap.getHeight(), Config.ARGB_8888);  
+		Canvas canvas = new Canvas(output);  
+		final int color = 0xff424242;  
+		final Paint paint = new Paint();  
+		final Rect rect = new Rect(0, 0, bitmap.getWidth(), bitmap.getHeight());  
+		final RectF rectF = new RectF(rect);  
+		final float roundPx = pixels;  
+		paint.setAntiAlias(true);  
+		canvas.drawARGB(0, 0, 0, 0);  
+		paint.setColor(color);  
+		canvas.drawRoundRect(rectF, roundPx, roundPx, paint);  
+		paint.setXfermode(new PorterDuffXfermode(Mode.SRC_IN));  
+		canvas.drawBitmap(bitmap, rect, rect, paint);  
+		return output;  
+	}
+        static final int[] APP_ICON_BG = {
+		R.drawable.icon_bg_01,
+		R.drawable.icon_bg_02,
+		R.drawable.icon_bg_03,
+		R.drawable.icon_bg_04,
+		R.drawable.icon_bg_05
+	};
     /**
      * Returns a Bitmap representing the thumbnail of the specified Bitmap.
      *
