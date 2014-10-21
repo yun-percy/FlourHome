@@ -1,21 +1,21 @@
 
-/*
- * Copyright (C) 2008 The Android Open Source Project
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 
 package com.flour.launcher3;
+
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.io.File;
+import java.io.FileDescriptor;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.text.DateFormat;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
 
 import android.accounts.Account;
 import android.accounts.AccountManager;
@@ -44,11 +44,7 @@ import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
 import android.content.pm.PackageManager;
-import android.provider.Settings;
 import android.content.pm.PackageManager.NameNotFoundException;
-import android.content.pm.ResolveInfo;
-import com.flour.launcher3.FlourSettings;
-import com.flour.launcher3.SettingsProvider;
 import android.content.res.Configuration;
 import android.content.res.Resources;
 import android.database.ContentObserver;
@@ -66,6 +62,7 @@ import android.os.Handler;
 import android.os.Message;
 import android.os.StrictMode;
 import android.os.SystemClock;
+import android.provider.Settings;
 import android.speech.RecognizerIntent;
 import android.text.Selection;
 import android.text.SpannableStringBuilder;
@@ -99,23 +96,7 @@ import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import com.flour.launcher3.R;
 import com.flour.launcher3.DropTarget.DragObject;
-
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.File;
-import java.io.FileDescriptor;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.PrintWriter;
-import java.text.DateFormat;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Date;
-import java.util.HashMap;
-import java.util.List;
 
 /**
  * Default launcher application.
@@ -293,13 +274,9 @@ public class Launcher extends Activity
     private HashMap<View, AppWidgetProviderInfo> mWidgetsToAdvance =
         new HashMap<View, AppWidgetProviderInfo>();
 
-    // Determines how long to wait after a rotation before restoring the screen orientation to
-    // match the sensor state.
+
     private final int mRestoreScreenOrientationDelay = 500;
 
-    // External icons saved in case of resource changes, orientation, etc.
-    private static Drawable.ConstantState[] sGlobalSearchIcon = new Drawable.ConstantState[2];
-    private static Drawable.ConstantState[] sVoiceSearchIcon = new Drawable.ConstantState[2];
     private static Drawable.ConstantState[] sAppMarketIcon = new Drawable.ConstantState[2];
 
     private Intent mAppMarketIntent = null;
@@ -523,22 +500,6 @@ public class Launcher extends Activity
         boolean voiceVisible = false;
         // If we have a saved version of these external icons, we load them up immediately
         int coi = getCurrentOrientationIndexForGlobalIcons();
-        if (sGlobalSearchIcon[coi] == null || sVoiceSearchIcon[coi] == null ||
-                sAppMarketIcon[coi] == null) {
-            if (!DISABLE_MARKET_BUTTON) {
-                updateAppMarketIcon();
-            }
-            searchVisible = updateGlobalSearchIcon();
-            voiceVisible = updateVoiceSearchIcon(searchVisible);
-        }
-        if (sGlobalSearchIcon[coi] != null) {
-             updateGlobalSearchIcon(sGlobalSearchIcon[coi]);
-             searchVisible = true;
-        }
-        if (sVoiceSearchIcon[coi] != null) {
-            updateVoiceSearchIcon(sVoiceSearchIcon[coi]);
-            voiceVisible = true;
-        }
         if (!DISABLE_MARKET_BUTTON && sAppMarketIcon[coi] != null) {
             updateAppMarketIcon(sAppMarketIcon[coi]);
         }
@@ -889,31 +850,19 @@ public class Launcher extends Activity
             mOnResumeCallbacks.clear();
         }
 
-        // Reset the pressed state of icons that were locked in the press state while activities
-        // were launching
         if (mWaitingForResume != null) {
-            // Resets the previous workspace icon press state
             mWaitingForResume.setStayPressed(false);
         }
         if (mAppsCustomizeContent != null) {
-            // Resets the previous all apps icon press state
             mAppsCustomizeContent.resetDrawableState();
         }
 
-        // It is possible that widgets can receive updates while launcher is not in the foreground.
-        // Consequently, the widgets will be inflated in the orientation of the foreground activity
-        // (framework issue). On resuming, we ensure that any widgets are inflated for the current
-        // orientation.
         getWorkspace().reinflateWidgetsIfNecessary();
 
-        // Process any items that were added while Launcher was away.
         InstallShortcutReceiver.disableAndFlushInstallQueue(this);
 
-        // Update the voice search button proxy
         updateVoiceButtonProxyVisible(false);
 
-        // Again, as with the above scenario, it's possible that one or more of the global icons
-        // were updated in the wrong orientation.
         updateGlobalIcons();
         if (DEBUG_RESUME_TIME) {
             Log.d(TAG, "Time spent in onResume: " + (System.currentTimeMillis() - startTime));
@@ -3310,45 +3259,10 @@ public class Launcher extends Activity
     public View getQsbBar() {
         if (mQsbBar == null) {
             mQsbBar = mInflater.inflate(R.layout.search_bar, mSearchDropTargetBar, false);
-            mSearchDropTargetBar.addView(mQsbBar);
         }
         return mQsbBar;
     }
 
-    protected boolean updateGlobalSearchIcon() {
-        final View searchButtonContainer = findViewById(R.id.search_button_container);
-        final ImageView searchButton = (ImageView) findViewById(R.id.search_button);
-        final View voiceButtonContainer = findViewById(R.id.voice_button_container);
-        final View voiceButton = findViewById(R.id.voice_button);
-
-        final SearchManager searchManager =
-                (SearchManager) getSystemService(Context.SEARCH_SERVICE);
-        ComponentName activityName = searchManager.getGlobalSearchActivity();
-        if (activityName != null) {
-            int coi = getCurrentOrientationIndexForGlobalIcons();
-            sGlobalSearchIcon[coi] = updateButtonWithIconFromExternalActivity(
-                    R.id.search_button, activityName, R.drawable.ic_home_search_normal_holo,
-                    TOOLBAR_SEARCH_ICON_METADATA_NAME);
-            if (sGlobalSearchIcon[coi] == null) {
-                sGlobalSearchIcon[coi] = updateButtonWithIconFromExternalActivity(
-                        R.id.search_button, activityName, R.drawable.ic_home_search_normal_holo,
-                        TOOLBAR_ICON_METADATA_NAME);
-            }
-
-            if (searchButtonContainer != null) searchButtonContainer.setVisibility(View.VISIBLE);
-            searchButton.setVisibility(View.VISIBLE);
-            invalidatePressedFocusedStates(searchButtonContainer, searchButton);
-            return true;
-        } else {
-            // We disable both search and voice search when there is no global search provider
-            if (searchButtonContainer != null) searchButtonContainer.setVisibility(View.GONE);
-            if (voiceButtonContainer != null) voiceButtonContainer.setVisibility(View.GONE);
-            if (searchButton != null) searchButton.setVisibility(View.GONE);
-            if (voiceButton != null) voiceButton.setVisibility(View.GONE);
-            updateVoiceButtonProxyVisible(false);
-            return false;
-        }
-    }
 
     protected void updateGlobalSearchIcon(Drawable.ConstantState d) {
         final View searchButtonContainer = findViewById(R.id.search_button_container);
@@ -3357,51 +3271,6 @@ public class Launcher extends Activity
         invalidatePressedFocusedStates(searchButtonContainer, searchButton);
     }
 
-    protected boolean updateVoiceSearchIcon(boolean searchVisible) {
-        final View voiceButtonContainer = findViewById(R.id.voice_button_container);
-        final View voiceButton = findViewById(R.id.voice_button);
-
-        // We only show/update the voice search icon if the search icon is enabled as well
-        final SearchManager searchManager =
-                (SearchManager) getSystemService(Context.SEARCH_SERVICE);
-        ComponentName globalSearchActivity = searchManager.getGlobalSearchActivity();
-
-        ComponentName activityName = null;
-        if (globalSearchActivity != null) {
-            // Check if the global search activity handles voice search
-            Intent intent = new Intent(RecognizerIntent.ACTION_WEB_SEARCH);
-            intent.setPackage(globalSearchActivity.getPackageName());
-            activityName = intent.resolveActivity(getPackageManager());
-        }
-
-        if (activityName == null) {
-            // Fallback: check if an activity other than the global search activity
-            // resolves this
-            Intent intent = new Intent(RecognizerIntent.ACTION_WEB_SEARCH);
-            activityName = intent.resolveActivity(getPackageManager());
-        }
-        if (searchVisible && activityName != null) {
-            int coi = getCurrentOrientationIndexForGlobalIcons();
-            sVoiceSearchIcon[coi] = updateButtonWithIconFromExternalActivity(
-                    R.id.voice_button, activityName, R.drawable.ic_home_voice_search_holo,
-                    TOOLBAR_VOICE_SEARCH_ICON_METADATA_NAME);
-            if (sVoiceSearchIcon[coi] == null) {
-                sVoiceSearchIcon[coi] = updateButtonWithIconFromExternalActivity(
-                        R.id.voice_button, activityName, R.drawable.ic_home_voice_search_holo,
-                        TOOLBAR_ICON_METADATA_NAME);
-            }
-            if (voiceButtonContainer != null) voiceButtonContainer.setVisibility(View.VISIBLE);
-            voiceButton.setVisibility(View.VISIBLE);
-            updateVoiceButtonProxyVisible(false);
-            invalidatePressedFocusedStates(voiceButtonContainer, voiceButton);
-            return true;
-        } else {
-            if (voiceButtonContainer != null) voiceButtonContainer.setVisibility(View.GONE);
-            if (voiceButton != null) voiceButton.setVisibility(View.GONE);
-            updateVoiceButtonProxyVisible(false);
-            return false;
-        }
-    }
 
     protected void updateVoiceSearchIcon(Drawable.ConstantState d) {
         final View voiceButtonContainer = findViewById(R.id.voice_button_container);
@@ -3917,14 +3786,6 @@ public class Launcher extends Activity
         return bounceAnim;
     }
 
-    @Override
-    public void bindSearchablesChanged() {
-        boolean searchVisible = updateGlobalSearchIcon();
-        boolean voiceVisible = updateVoiceSearchIcon(searchVisible);
-        if (mSearchDropTargetBar != null) {
-            mSearchDropTargetBar.onSearchPackagesChanged(searchVisible, voiceVisible);
-        }
-    }
 
     /**
      * Add the icons for all apps.
@@ -4495,6 +4356,12 @@ public class Launcher extends Activity
             }.start();
         }
     }
+
+	@Override
+	public void bindSearchablesChanged() {
+		// TODO Auto-generated method stub
+		
+	}
 }
 
 interface LauncherTransitionable {
